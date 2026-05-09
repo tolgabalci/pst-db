@@ -135,6 +135,7 @@ export function App() {
   const [detail, setDetail] = useState<EmailDetail | null>(null);
   const [attachments, setAttachments] = useState<AttachmentDetail[]>([]);
   const [noteDraft, setNoteDraft] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -207,6 +208,7 @@ export function App() {
 
   const selectedResult = useMemo(() => results.find((result) => result.id === selectedId), [results, selectedId]);
   const selectedIndex = useMemo(() => results.findIndex((result) => result.id === selectedId), [results, selectedId]);
+  const noteHasChanges = detail ? noteDraft !== (detail.note || "") : false;
 
   const handleResultListKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
@@ -251,9 +253,15 @@ export function App() {
   }
 
   async function persistNote() {
-    if (!detail) return;
-    await saveNote(detail.id, noteDraft);
-    setDetail({ ...detail, note: noteDraft });
+    if (!detail || !noteHasChanges || noteSaving) return;
+    setNoteSaving(true);
+    try {
+      const saved = await saveNote(detail.id, noteDraft);
+      setDetail({ ...detail, note: saved.note });
+      setNoteDraft(saved.note);
+    } finally {
+      setNoteSaving(false);
+    }
   }
 
   return (
@@ -495,9 +503,9 @@ export function App() {
                 <div className="note-editor">
                   <label>Notes</label>
                   <textarea value={noteDraft} onChange={(event) => setNoteDraft(event.target.value)} />
-                  <button onClick={() => void persistNote()}>
-                    <Save size={16} />
-                    Save note
+                  <button onClick={() => void persistNote()} disabled={!noteHasChanges || noteSaving}>
+                    {noteSaving ? <Loader2 size={16} className="spin" /> : <Save size={16} />}
+                    {noteSaving ? "Saving" : "Save note"}
                   </button>
                 </div>
 
