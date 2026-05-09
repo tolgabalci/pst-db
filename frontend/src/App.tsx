@@ -444,7 +444,7 @@ export function App() {
               )}
             </div>
 
-            {totalPages > 1 && (
+            {!loading && totalPages > 1 && (
               <div className="pager">
                 <button disabled={offset === 0 || loading} onClick={() => void runSearch(Math.max(0, offset - PAGE_SIZE))}>
                   Previous
