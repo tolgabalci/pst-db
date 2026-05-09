@@ -426,8 +426,10 @@ mark {
 
 .attachment-item.image-card {
   align-items: center;
-  grid-template-columns: minmax(96px, 1fr) auto auto;
-  min-width: 148px;
+  background: transparent;
+  border: 0;
+  min-width: 124px;
+  padding: 0;
 }
 
 .attachment-item.image-card > div {

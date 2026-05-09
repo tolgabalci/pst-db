@@ -93,7 +93,8 @@ function displayRecipients(recipients: EmailDetail["recipients"]): string {
   return rendered.join(" · ") || "None";
 }
 
-type ImageAttachmentLike = Pick<AttachmentDetail, "filename" | "mime_type">;
+type ImageAttachmentLike = Pick<AttachmentDetail, "filename" | "mime_type"> &
+  Partial<Pick<AttachmentDetail, "content_id" | "disposition">>;
 
 function isThumbnailImage(attachment: ImageAttachmentLike): boolean {
   const mimeType = attachment.mime_type?.toLowerCase();
@@ -101,7 +102,23 @@ function isThumbnailImage(attachment: ImageAttachmentLike): boolean {
 }
 
 function isGenericImageName(attachment: ImageAttachmentLike): boolean {
-  return isThumbnailImage(attachment) && /^attachedimage(?:\.\w+)?$/i.test(attachment.filename.trim());
+  const filename = attachment.filename.trim().toLowerCase();
+  return (
+    isThumbnailImage(attachment) &&
+    (/^attachedimage(?:\.\w+)?$/i.test(filename) ||
+      /^image\d+\.(png|jpe?g|gif|webp|bmp)$/i.test(filename) ||
+      /^(logo|signature|spacer|banner|divider|facebook|twitter|linkedin|instagram|youtube)[-_]?\d*\.(png|jpe?g|gif|webp|bmp)$/i.test(
+        filename
+      ))
+  );
+}
+
+function isInlineImage(attachment: ImageAttachmentLike): boolean {
+  return isThumbnailImage(attachment) && Boolean(attachment.content_id || attachment.disposition?.toLowerCase() === "inline");
+}
+
+function isClutterImageAttachment(attachment: ImageAttachmentLike): boolean {
+  return isGenericImageName(attachment) || isInlineImage(attachment);
 }
 
 function isMeetingRequest(result: SearchResult): boolean {
@@ -224,6 +241,10 @@ export function App() {
   const selectedResult = useMemo(() => results.find((result) => result.id === selectedId), [results, selectedId]);
   const selectedIndex = useMemo(() => results.findIndex((result) => result.id === selectedId), [results, selectedId]);
   const noteHasChanges = detail ? noteDraft !== (detail.note || "") : false;
+  const visibleDetailAttachments = useMemo(
+    () => attachments.filter((attachment) => !isClutterImageAttachment(attachment)),
+    [attachments]
+  );
 
   const handleResultListKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
@@ -392,7 +413,7 @@ export function App() {
               ref={resultListRef}
             >
               {results.map((result) => {
-                const visibleAttachments = result.attachments.filter((attachment) => !isGenericImageName(attachment)).slice(0, 3);
+                const visibleAttachments = result.attachments.filter((attachment) => !isClutterImageAttachment(attachment)).slice(0, 3);
                 const rowClasses = ["result-row", selectedId === result.id ? "selected" : "", isMeetingRequest(result) ? "meeting-request" : ""]
                   .filter(Boolean)
                   .join(" ");
@@ -486,7 +507,7 @@ export function App() {
                 </div>
 
                 <div className="attachment-strip">
-                  {attachments.map((attachment) => (
+                  {visibleDetailAttachments.map((attachment) => (
                     <div key={attachment.id} className={isThumbnailImage(attachment) ? "attachment-item image-card" : "attachment-item"}>
                       {isThumbnailImage(attachment) ? (
                         <a
@@ -495,7 +516,7 @@ export function App() {
                           target="_blank"
                           rel="noreferrer"
                           aria-label={`Open ${attachment.filename} in a new tab`}
-                          title={`Open ${attachment.filename} in a new tab`}
+                          title={attachment.filename}
                         >
                           <img src={attachmentPreviewUrl(attachment.id)} alt="" loading="lazy" />
                         </a>
@@ -504,21 +525,25 @@ export function App() {
                           <Paperclip size={15} />
                         </span>
                       )}
-                      <div>
-                        {!isGenericImageName(attachment) && <strong>{attachment.filename}</strong>}
-                        <span>
-                          {attachment.mime_type || "file"} · {formatBytes(attachment.size_bytes)} · {attachment.extraction_status}
-                        </span>
-                      </div>
-                      <a href={attachmentPreviewUrl(attachment.id)} target="_blank" rel="noreferrer" title="Preview">
-                        <FileText size={16} />
-                      </a>
-                      <a href={attachmentDownloadUrl(attachment.id)} title="Download">
-                        <Download size={16} />
-                      </a>
+                      {!isThumbnailImage(attachment) && (
+                        <>
+                          <div>
+                            <strong>{attachment.filename}</strong>
+                            <span>
+                              {attachment.mime_type || "file"} · {formatBytes(attachment.size_bytes)} · {attachment.extraction_status}
+                            </span>
+                          </div>
+                          <a href={attachmentPreviewUrl(attachment.id)} target="_blank" rel="noreferrer" title="Preview">
+                            <FileText size={16} />
+                          </a>
+                          <a href={attachmentDownloadUrl(attachment.id)} title="Download">
+                            <Download size={16} />
+                          </a>
+                        </>
+                      )}
                     </div>
                   ))}
-                  {attachments.length === 0 && <span className="muted">No attachments</span>}
+                  {visibleDetailAttachments.length === 0 && <span className="muted">No attachments</span>}
                 </div>
 
                 <div className="note-editor">
