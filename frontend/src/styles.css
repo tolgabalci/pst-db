@@ -433,10 +433,11 @@ mark {
 }
 
 .attachment-item.image-card > div {
-  grid-column: 1 / -1;
-  justify-items: center;
-  min-width: 0;
-  text-align: center;
+  display: none;
+}
+
+.attachment-item.image-card > a:not(.attachment-thumb) {
+  display: none;
 }
 
 .attachment-thumb {

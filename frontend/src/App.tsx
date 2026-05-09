@@ -413,7 +413,7 @@ export function App() {
               ref={resultListRef}
             >
               {results.map((result) => {
-                const visibleAttachments = result.attachments.filter((attachment) => !isClutterImageAttachment(attachment)).slice(0, 3);
+                const visibleAttachments = result.attachments.filter((attachment) => !isThumbnailImage(attachment)).slice(0, 3);
                 const rowClasses = ["result-row", selectedId === result.id ? "selected" : "", isMeetingRequest(result) ? "meeting-request" : ""]
                   .filter(Boolean)
                   .join(" ");
