@@ -1,0 +1,105 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pstdb}
+      POSTGRES_USER: ${POSTGRES_USER:-pstdb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pstdb}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${BIND_HOST:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ${POSTGRES_DATA_HOST:-./data/postgres}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pstdb} -d ${POSTGRES_DB:-pstdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  tika:
+    image: apache/tika:3.2.3.0-full
+    ports:
+      - "${BIND_HOST:-127.0.0.1}:${TIKA_PORT:-9998}:9998"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9998/tika >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  ollama:
+    image: ollama/ollama:latest
+    environment:
+      LD_LIBRARY_PATH: /usr/lib/wsl/lib
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    devices:
+      - /dev/dxg:/dev/dxg
+    ports:
+      - "${BIND_HOST:-127.0.0.1}:${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama:/root/.ollama
+      - /usr/lib/wsl/lib:/usr/lib/wsl/lib:ro
+      - /usr/lib/wsl/drivers:/usr/lib/wsl/drivers:ro
+
+  api:
+    build:
+      context: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://pstdb:pstdb@postgres:5432/pstdb}
+      IMPORT_DIR: /data/imports
+      ATTACHMENT_DIR: /data/attachments
+      TIKA_URL: ${TIKA_URL:-http://tika:9998}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-embeddinggemma}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-768}
+    ports:
+      - "${BIND_HOST:-127.0.0.1}:${API_PORT:-8000}:8000"
+    volumes:
+      - ${IMPORTS_HOST:-./data/imports}:/data/imports
+      - ${ATTACHMENTS_HOST:-./data/attachments}:/data/attachments
+    depends_on:
+      postgres:
+        condition: service_healthy
+      tika:
+        condition: service_started
+      ollama:
+        condition: service_started
+
+  worker:
+    build:
+      context: ./backend
+    command: python3 -m app.worker
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://pstdb:pstdb@postgres:5432/pstdb}
+      IMPORT_DIR: /data/imports
+      ATTACHMENT_DIR: /data/attachments
+      TIKA_URL: ${TIKA_URL:-http://tika:9998}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-embeddinggemma}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-768}
+    volumes:
+      - ${IMPORTS_HOST:-./data/imports}:/data/imports
+      - ${ATTACHMENTS_HOST:-./data/attachments}:/data/attachments
+    depends_on:
+      postgres:
+        condition: service_healthy
+      tika:
+        condition: service_started
+      ollama:
+        condition: service_started
+
+  web:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_BASE_URL: http://localhost:${API_PORT:-8000}
+    ports:
+      - "${BIND_HOST:-127.0.0.1}:${WEB_PORT:-5173}:5173"
+    depends_on:
+      - api
+
+volumes:
+  ollama:
+    name: ${OLLAMA_VOLUME:-pst-db_ollama}
+    external: ${OLLAMA_VOLUME_EXTERNAL:-false}

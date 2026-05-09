@@ -1,0 +1,12 @@
+.git
+.env
+.env.local
+node_modules
+dist
+__pycache__
+.pytest_cache
+.ruff_cache
+tmp
+data/postgres
+data/attachments
+data/imports
