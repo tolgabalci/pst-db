@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 
 from app.config import Settings, get_settings
 from app.db import get_conn
+from app.services.app_settings import get_cache_settings
 
 router = APIRouter(prefix="/api/attachments", tags=["attachments"])
 
@@ -35,20 +36,33 @@ def _attachment_file(attachment_id: UUID, settings: Settings):
 @router.get("/{attachment_id}/preview")
 def preview_attachment(attachment_id: UUID, settings: Settings = Depends(get_settings)):
     row, path = _attachment_file(attachment_id, settings)
+    cache_headers = _cache_headers()
     return FileResponse(
         path,
         media_type=row["mime_type"] or "application/octet-stream",
         filename=row["filename"],
         content_disposition_type="inline",
+        headers=cache_headers,
     )
 
 
 @router.get("/{attachment_id}/download")
 def download_attachment(attachment_id: UUID, settings: Settings = Depends(get_settings)):
     row, path = _attachment_file(attachment_id, settings)
+    cache_headers = _cache_headers()
     return FileResponse(
         path,
         media_type=row["mime_type"] or "application/octet-stream",
         filename=row["filename"],
         content_disposition_type="attachment",
+        headers=cache_headers,
     )
+
+
+def _cache_headers() -> dict[str, str]:
+    with get_conn() as conn:
+        cache_settings = get_cache_settings(conn)
+    max_age = cache_settings.attachment_preview_cache_max_age_seconds
+    if max_age <= 0:
+        return {"Cache-Control": "no-store"}
+    return {"Cache-Control": f"private, max-age={max_age}"}

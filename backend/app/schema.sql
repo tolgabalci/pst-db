@@ -119,6 +119,12 @@ CREATE TABLE IF NOT EXISTS user_notes (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS app_settings (
+  key text PRIMARY KEY,
+  value jsonb NOT NULL DEFAULT '{}'::jsonb,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_import_jobs_status_created ON import_jobs(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_import_errors_job ON import_errors(job_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_emails_sender_email ON emails(lower(sender_email));
@@ -131,4 +137,3 @@ CREATE INDEX IF NOT EXISTS idx_email_attachments_filename_trgm ON email_attachme
 CREATE INDEX IF NOT EXISTS idx_search_documents_email ON search_documents(email_id);
 CREATE INDEX IF NOT EXISTS idx_search_documents_tsv ON search_documents USING gin(weighted_tsv);
 CREATE INDEX IF NOT EXISTS idx_search_documents_embedding_hnsw ON search_documents USING hnsw (embedding vector_cosine_ops) WHERE embedding IS NOT NULL;
-

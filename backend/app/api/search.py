@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, Query
 
 from app.config import Settings, get_settings
 from app.db import get_conn
+from app.services.app_settings import get_cache_settings
+from app.services.runtime_cache import FOLDER_LIST_CACHE
 from app.services.search import SearchRequest, SearchService
 
 router = APIRouter(prefix="/api/search", tags=["search"])
@@ -49,6 +51,18 @@ def search(
 @router.get("/folders")
 def search_folders():
     with get_conn() as conn:
+        cache_settings = get_cache_settings(conn)
+        version = conn.execute(
+            "SELECT coalesce(max(imported_at)::text, '') AS version FROM email_occurrences"
+        ).fetchone()["version"]
+        cache_key = ("search_folders", version)
+        cached = FOLDER_LIST_CACHE.get(
+            cache_key,
+            cache_settings.folder_list_cache_entries,
+            cache_settings.folder_list_cache_ttl_seconds,
+        )
+        if cached is not None:
+            return cached
         rows = conn.execute(
             """
             SELECT
@@ -59,10 +73,17 @@ def search_folders():
             ORDER BY lower(coalesce(folder_path, pst_path))
             """
         ).fetchall()
-    return [
+    result = [
         {
             "folder_path": row["folder_path"],
             "email_count": row["email_count"],
         }
         for row in rows
     ]
+    FOLDER_LIST_CACHE.set(
+        cache_key,
+        result,
+        cache_settings.folder_list_cache_entries,
+        cache_settings.folder_list_cache_ttl_seconds,
+    )
+    return result

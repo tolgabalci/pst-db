@@ -73,7 +73,11 @@ button:disabled {
 .file-row,
 .job-row,
 .job-status,
-.job-stats {
+.job-stats,
+.settings-header,
+.setting-row,
+.setting-control,
+.settings-actions {
   align-items: center;
   display: flex;
 }
@@ -292,6 +296,11 @@ button:disabled {
 .notice.warn {
   background: #fff7df;
   color: #744b00;
+}
+
+.notice.success {
+  background: #ebf8ef;
+  color: #1f6b3d;
 }
 
 .result-header,
@@ -686,6 +695,96 @@ mark {
   padding: 3px 7px;
 }
 
+.settings-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-rows: auto auto 1fr;
+  overflow: auto;
+  padding: 18px;
+}
+
+.settings-header {
+  background: #ffffff;
+  border: 1px solid #d3dde5;
+  border-radius: 8px;
+  justify-content: space-between;
+  padding: 18px;
+}
+
+.settings-header h1 {
+  font-size: 22px;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.settings-header p {
+  color: #65737f;
+  margin: 4px 0 0;
+}
+
+.settings-panel {
+  background: #ffffff;
+  border: 1px solid #d3dde5;
+  border-radius: 8px;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.settings-grid {
+  display: grid;
+  overflow: auto;
+}
+
+.setting-row {
+  border-bottom: 1px solid #e4ebf0;
+  gap: 18px;
+  justify-content: space-between;
+  padding: 14px 18px;
+}
+
+.setting-row > span:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.setting-row strong {
+  font-size: 14px;
+}
+
+.setting-row small {
+  color: #65737f;
+}
+
+.setting-control {
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.setting-control input {
+  border: 1px solid #cbd6df;
+  border-radius: 6px;
+  min-height: 34px;
+  padding: 0 8px;
+  width: 116px;
+}
+
+.setting-control em {
+  color: #65737f;
+  font-size: 12px;
+  font-style: normal;
+  width: 58px;
+}
+
+.settings-actions {
+  border-top: 1px solid #dce4ea;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 14px 18px;
+}
+
 .spin {
   animation: spin 1s linear infinite;
 }
@@ -729,5 +828,14 @@ mark {
 
   .note-editor {
     grid-template-columns: 1fr;
+  }
+
+  .setting-row {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .setting-control {
+    justify-content: space-between;
   }
 }

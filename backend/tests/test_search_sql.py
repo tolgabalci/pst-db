@@ -45,3 +45,11 @@ def test_semantic_sql_uses_vector_when_available():
 def test_all_mode_uses_stricter_semantic_cutoff():
     assert _min_semantic_score("all") == MIN_HYBRID_SEMANTIC_SCORE
     assert _min_semantic_score("semantic") == MIN_SEMANTIC_SCORE
+
+
+def test_search_cache_key_sorts_selected_folders():
+    service = SearchService(Settings())
+    first = service._search_cache_key(SearchRequest(q="roadmap", folders=["B", "A"]), "all", 50, 0, "v1")
+    second = service._search_cache_key(SearchRequest(q="roadmap", folders=["A", "B"]), "all", 50, 0, "v1")
+
+    assert first == second

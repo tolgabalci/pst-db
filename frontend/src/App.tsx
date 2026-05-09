@@ -16,6 +16,8 @@ import {
   RefreshCw,
   Save,
   Search,
+  Settings as SettingsIcon,
+  SlidersHorizontal,
   Star,
   UserRound,
   XCircle
@@ -23,9 +25,12 @@ import {
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   API_BASE,
+  applyClientCacheSettings,
   attachmentDownloadUrl,
   attachmentPreviewUrl,
   createImport,
+  DEFAULT_APP_SETTINGS,
+  getAppSettings,
   getEmail,
   getEmailAttachments,
   listSearchFolders,
@@ -33,9 +38,10 @@ import {
   saveNote,
   scanImports,
   searchEmails,
-  setFavorite
+  setFavorite,
+  updateAppSettings
 } from "./api";
-import type { AttachmentDetail, EmailDetail, ImportFile, ImportJob, MailboxFolder, SearchMode, SearchResult } from "./types";
+import type { AppSettings, AttachmentDetail, EmailDetail, ImportFile, ImportJob, MailboxFolder, SearchMode, SearchResult } from "./types";
 
 const PAGE_SIZE = 50;
 const THUMBNAIL_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"]);
@@ -160,7 +166,9 @@ function moveFocusToResult(list: HTMLDivElement | null, resultId: string) {
 }
 
 export function App() {
-  const [tab, setTab] = useState<"search" | "imports">("search");
+  const [tab, setTab] = useState<"search" | "imports" | "settings">("search");
+  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<SearchMode>("all");
   const [author, setAuthor] = useState("");
@@ -190,6 +198,25 @@ export function App() {
 
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  useEffect(() => {
+    let canceled = false;
+    getAppSettings()
+      .then((settings) => {
+        if (canceled) return;
+        setAppSettings(settings);
+        applyClientCacheSettings(settings);
+      })
+      .catch((err) => {
+        if (!canceled) setError(err instanceof Error ? err.message : "Failed to load settings.");
+      })
+      .finally(() => {
+        if (!canceled) setSettingsLoaded(true);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, []);
 
   const runSearch = useCallback(
     async (nextOffset = 0) => {
@@ -246,6 +273,7 @@ export function App() {
   );
 
   useEffect(() => {
+    if (!settingsLoaded) return;
     let canceled = false;
     listSearchFolders()
       .then((folders) => {
@@ -263,7 +291,7 @@ export function App() {
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [settingsLoaded]);
 
   useEffect(() => {
     if (foldersLoaded) void runSearch(0);
@@ -378,6 +406,10 @@ export function App() {
           <button className={tab === "imports" ? "active" : ""} onClick={() => setTab("imports")}>
             <FolderSync size={16} />
             Imports
+          </button>
+          <button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}>
+            <SettingsIcon size={16} />
+            Settings
           </button>
         </nav>
         <div className="api-pill">{API_BASE}</div>
@@ -673,8 +705,16 @@ export function App() {
             )}
           </section>
         </main>
-      ) : (
+      ) : tab === "imports" ? (
         <ImportPanel />
+      ) : (
+        <SettingsPanel
+          settings={appSettings}
+          onSave={(settings) => {
+            setAppSettings(settings);
+            applyClientCacheSettings(settings);
+          }}
+        />
       )}
     </div>
   );
@@ -790,6 +830,187 @@ function ImportPanel() {
               No imports have been created.
             </div>
           )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+type SettingsField = {
+  key: keyof AppSettings;
+  label: string;
+  help: string;
+  min: number;
+  max: number;
+  unit: string;
+};
+
+const SETTINGS_FIELDS: SettingsField[] = [
+  {
+    key: "search_result_cache_entries",
+    label: "Search result cache size",
+    help: "Maximum backend search pages kept in memory.",
+    min: 0,
+    max: 10000,
+    unit: "entries"
+  },
+  {
+    key: "search_result_cache_ttl_seconds",
+    label: "Search result cache lifetime",
+    help: "How long cached backend search pages can be reused.",
+    min: 0,
+    max: 86400,
+    unit: "seconds"
+  },
+  {
+    key: "query_embedding_cache_entries",
+    label: "Query embedding cache size",
+    help: "Maximum semantic query vectors kept in backend memory.",
+    min: 0,
+    max: 50000,
+    unit: "entries"
+  },
+  {
+    key: "query_embedding_cache_ttl_seconds",
+    label: "Query embedding cache lifetime",
+    help: "How long repeated semantic query vectors are reused.",
+    min: 0,
+    max: 604800,
+    unit: "seconds"
+  },
+  {
+    key: "folder_list_cache_entries",
+    label: "Folder list cache size",
+    help: "Maximum backend folder-list versions kept in memory.",
+    min: 0,
+    max: 1000,
+    unit: "entries"
+  },
+  {
+    key: "folder_list_cache_ttl_seconds",
+    label: "Folder list cache lifetime",
+    help: "How long mailbox folder lists can be reused.",
+    min: 0,
+    max: 3600,
+    unit: "seconds"
+  },
+  {
+    key: "import_status_cache_entries",
+    label: "Import status cache size",
+    help: "Maximum import status responses kept in memory.",
+    min: 0,
+    max: 1000,
+    unit: "entries"
+  },
+  {
+    key: "import_status_cache_ttl_seconds",
+    label: "Import status cache lifetime",
+    help: "How long import scan and job status responses can be reused.",
+    min: 0,
+    max: 300,
+    unit: "seconds"
+  },
+  {
+    key: "email_detail_cache_entries",
+    label: "Email detail browser cache size",
+    help: "Maximum opened messages kept in the browser session.",
+    min: 0,
+    max: 10000,
+    unit: "entries"
+  },
+  {
+    key: "attachment_metadata_cache_entries",
+    label: "Attachment metadata browser cache size",
+    help: "Maximum attachment lists kept in the browser session.",
+    min: 0,
+    max: 10000,
+    unit: "entries"
+  },
+  {
+    key: "attachment_preview_cache_max_age_seconds",
+    label: "Attachment preview browser cache lifetime",
+    help: "Cache-Control max age sent for previews and downloads.",
+    min: 0,
+    max: 2592000,
+    unit: "seconds"
+  }
+];
+
+function SettingsPanel({ settings, onSave }: { settings: AppSettings; onSave: (settings: AppSettings) => void }) {
+  const [draft, setDraft] = useState<AppSettings>(settings);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraft(settings);
+  }, [settings]);
+
+  const hasChanges = JSON.stringify(draft) !== JSON.stringify(settings);
+
+  function setValue(key: keyof AppSettings, value: string) {
+    const parsed = Number.parseInt(value, 10);
+    setDraft((current) => ({ ...current, [key]: Number.isFinite(parsed) ? parsed : 0 }));
+  }
+
+  async function saveSettings(nextSettings = draft) {
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const saved = await updateAppSettings(nextSettings);
+      setDraft(saved);
+      onSave(saved);
+      setMessage("Settings saved.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save settings.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <main className="settings-layout">
+      <section className="settings-header">
+        <div>
+          <h1>Settings</h1>
+          <p>Runtime cache limits for this local site.</p>
+        </div>
+        <SlidersHorizontal size={22} />
+      </section>
+
+      {error && <div className="notice error">{error}</div>}
+      {message && <div className="notice success">{message}</div>}
+
+      <section className="settings-panel">
+        <div className="settings-grid">
+          {SETTINGS_FIELDS.map((field) => (
+            <label key={field.key} className="setting-row">
+              <span>
+                <strong>{field.label}</strong>
+                <small>{field.help}</small>
+              </span>
+              <span className="setting-control">
+                <input
+                  type="number"
+                  min={field.min}
+                  max={field.max}
+                  value={draft[field.key]}
+                  onChange={(event) => setValue(field.key, event.target.value)}
+                />
+                <em>{field.unit}</em>
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className="settings-actions">
+          <button type="button" onClick={() => void saveSettings(DEFAULT_APP_SETTINGS)} disabled={saving}>
+            Restore defaults
+          </button>
+          <button type="button" className="primary" onClick={() => void saveSettings()} disabled={!hasChanges || saving}>
+            {saving ? <Loader2 size={16} className="spin" /> : <Save size={16} />}
+            {saving ? "Saving" : "Save settings"}
+          </button>
         </div>
       </section>
     </main>

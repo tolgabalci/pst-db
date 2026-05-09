@@ -1,5 +1,19 @@
 export type SearchMode = "all" | "keyword" | "semantic";
 
+export interface AppSettings {
+  search_result_cache_entries: number;
+  search_result_cache_ttl_seconds: number;
+  query_embedding_cache_entries: number;
+  query_embedding_cache_ttl_seconds: number;
+  folder_list_cache_entries: number;
+  folder_list_cache_ttl_seconds: number;
+  import_status_cache_entries: number;
+  import_status_cache_ttl_seconds: number;
+  email_detail_cache_entries: number;
+  attachment_metadata_cache_entries: number;
+  attachment_preview_cache_max_age_seconds: number;
+}
+
 export interface AttachmentSummary {
   id: string;
   filename: string;

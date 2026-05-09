@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from app.config import Settings, get_settings
 from app.db import get_conn
 from app.services.note_index import index_note
+from app.services.runtime_cache import SEARCH_RESULT_CACHE
 from app.services.sanitize import sanitize_html
 from app.services.text import clean_text
 
@@ -119,6 +120,7 @@ def set_favorite(email_id: UUID, body: FavoritePatch):
             (email_id, body.is_favorite),
         )
         conn.commit()
+    SEARCH_RESULT_CACHE.clear()
     return {"email_id": str(email_id), "is_favorite": body.is_favorite}
 
 
@@ -140,4 +142,5 @@ def set_note(email_id: UUID, body: NoteUpdate, settings: Settings = Depends(get_
         )
         semantic_count = index_note(conn, settings, email_id, note)
         conn.commit()
+    SEARCH_RESULT_CACHE.clear()
     return {"email_id": str(email_id), "note": note, "semantic_indexed_count": semantic_count}

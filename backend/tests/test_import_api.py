@@ -11,6 +11,7 @@ from app.main import app
 @pytest.fixture(autouse=True)
 def disable_startup_db(monkeypatch):
     monkeypatch.setattr("app.main.init_db", lambda: None)
+    monkeypatch.setattr("app.api.imports.get_conn", lambda: _FakeContext(_FakeConn()))
 
 
 def test_scan_endpoint_finds_uppercase_pst(tmp_path: Path):
@@ -71,3 +72,13 @@ class _FakeContext:
 
     def __exit__(self, *_args):
         return False
+
+
+class _FakeConn:
+    def execute(self, *_args, **_kwargs):
+        return _FakeCursor()
+
+
+class _FakeCursor:
+    def fetchone(self):
+        return None

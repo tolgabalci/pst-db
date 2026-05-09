@@ -1,11 +1,14 @@
-from dataclasses import dataclass
+import json
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
 
 from psycopg import Connection
 
 from app.config import Settings
+from app.services.app_settings import CacheSettings, get_cache_settings
 from app.services.embeddings import EmbeddingClient, vector_literal
+from app.services.runtime_cache import QUERY_EMBEDDING_CACHE, SEARCH_RESULT_CACHE
 
 MIN_SEMANTIC_SCORE = 0.24
 MIN_HYBRID_SEMANTIC_SCORE = 0.52
@@ -44,23 +47,32 @@ class SearchService:
         self.embedder = EmbeddingClient(settings)
 
     def search(self, conn: Connection, request: SearchRequest) -> dict[str, Any]:
+        cache_settings = get_cache_settings(conn)
         mode = request.mode if request.mode in {"all", "keyword", "semantic"} else "all"
         query = (request.q or "").strip()
-        vector = None
-        semantic_error = None
-        if query and mode in {"all", "semantic"}:
-            embeddings, semantic_error = self.embedder.embed([query])
-            if embeddings:
-                vector = vector_literal(embeddings[0])
-
         params: dict[str, Any] = {
             "query": query,
             "limit": _clamp_limit(request.limit),
             "offset": max(0, request.offset),
-            "vector": vector,
+            "vector": None,
             "min_semantic_score": _min_semantic_score(mode),
         }
         filters = self._filters(request, params)
+        data_version = self._search_data_version(conn)
+        search_cache_key = self._search_cache_key(request, mode, params["limit"], params["offset"], data_version)
+        cached = SEARCH_RESULT_CACHE.get(
+            search_cache_key,
+            cache_settings.search_result_cache_entries,
+            cache_settings.search_result_cache_ttl_seconds,
+        )
+        if cached is not None:
+            return cached
+
+        vector = None
+        semantic_error = None
+        if query and mode in {"all", "semantic"}:
+            vector, semantic_error = self._query_vector(query, cache_settings)
+            params["vector"] = vector
 
         rows = self._run_search(conn, query, mode, filters, params, vector is not None)
         email_ids = [row["id"] for row in rows]
@@ -89,7 +101,61 @@ class SearchService:
                     "match_reasons": self._match_reasons(row),
                 }
             )
-        return {"results": results, "total": total, "semantic_error": semantic_error}
+        response = {"results": results, "total": total, "semantic_error": semantic_error}
+        if semantic_error is None:
+            SEARCH_RESULT_CACHE.set(
+                search_cache_key,
+                response,
+                cache_settings.search_result_cache_entries,
+                cache_settings.search_result_cache_ttl_seconds,
+            )
+        return response
+
+    def _query_vector(self, query: str, cache_settings: CacheSettings) -> tuple[str | None, str | None]:
+        cache_key = (self.settings.ollama_url, self.settings.ollama_model, self.settings.embedding_dimensions, query)
+        cached = QUERY_EMBEDDING_CACHE.get(
+            cache_key,
+            cache_settings.query_embedding_cache_entries,
+            cache_settings.query_embedding_cache_ttl_seconds,
+        )
+        if cached is not None:
+            return cached
+
+        embeddings, semantic_error = self.embedder.embed([query])
+        vector = vector_literal(embeddings[0]) if embeddings else None
+        if vector is not None:
+            QUERY_EMBEDDING_CACHE.set(
+                cache_key,
+                (vector, semantic_error),
+                cache_settings.query_embedding_cache_entries,
+                cache_settings.query_embedding_cache_ttl_seconds,
+            )
+        return vector, semantic_error
+
+    def _search_cache_key(self, request: SearchRequest, mode: str, limit: int, offset: int, data_version: str) -> str:
+        payload = asdict(request)
+        payload.update({"mode": mode, "q": (request.q or "").strip(), "limit": limit, "offset": offset, "data_version": data_version})
+        if request.folders is not None:
+            payload["folders"] = sorted(request.folders)
+        for key in ("date_from", "date_to"):
+            value = payload.get(key)
+            if isinstance(value, datetime):
+                payload[key] = value.isoformat()
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+    def _search_data_version(self, conn: Connection) -> str:
+        row = conn.execute(
+            """
+            SELECT concat_ws('|',
+              coalesce((SELECT max(created_at)::text FROM emails), ''),
+              coalesce((SELECT max(imported_at)::text FROM email_occurrences), ''),
+              coalesce((SELECT max(created_at)::text FROM search_documents), ''),
+              coalesce((SELECT max(updated_at)::text FROM email_flags), ''),
+              coalesce((SELECT max(updated_at)::text FROM user_notes), '')
+            ) AS version
+            """
+        ).fetchone()
+        return row["version"] if row else ""
 
     def _filters(self, request: SearchRequest, params: dict[str, Any]) -> str:
         clauses = ["TRUE"]
