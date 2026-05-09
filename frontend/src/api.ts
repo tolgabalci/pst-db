@@ -3,6 +3,7 @@ import type {
   EmailDetail,
   ImportFile,
   ImportJob,
+  MailboxFolder,
   SearchMode,
   SearchResponse
 } from "./types";
@@ -14,6 +15,7 @@ interface SearchParams {
   mode: SearchMode;
   author?: string;
   recipient?: string;
+  folders?: string[];
   subject?: string;
   attachmentFilename?: string;
   dateFrom?: string;
@@ -44,6 +46,13 @@ export async function searchEmails(params: SearchParams): Promise<SearchResponse
   query.set("offset", String(params.offset));
   if (params.author) query.set("author", params.author);
   if (params.recipient) query.set("recipient", params.recipient);
+  if (params.folders) {
+    if (params.folders.length === 0) {
+      query.append("folders", "__no_selected_folders__");
+    } else {
+      params.folders.forEach((folder) => query.append("folders", folder));
+    }
+  }
   if (params.subject) query.set("subject", params.subject);
   if (params.attachmentFilename) query.set("attachment_filename", params.attachmentFilename);
   if (params.dateFrom) query.set("date_from", params.dateFrom);
@@ -51,6 +60,10 @@ export async function searchEmails(params: SearchParams): Promise<SearchResponse
   if (params.hasAttachments !== undefined) query.set("has_attachments", String(params.hasAttachments));
   if (params.favorite !== undefined) query.set("favorite", String(params.favorite));
   return request<SearchResponse>(`/api/search?${query.toString()}`);
+}
+
+export function listSearchFolders(): Promise<MailboxFolder[]> {
+  return request<MailboxFolder[]>("/api/search/folders");
 }
 
 export function getEmail(emailId: string): Promise<EmailDetail> {

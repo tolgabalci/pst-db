@@ -184,6 +184,75 @@ button:disabled {
   font-size: 13px;
 }
 
+.folder-filter {
+  border: 1px solid #d4dde5;
+  border-radius: 6px;
+  background: #f3f6f8;
+}
+
+.folder-filter summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  list-style: none;
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+.folder-filter summary::-webkit-details-marker {
+  display: none;
+}
+
+.folder-filter summary strong {
+  color: #4f6572;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.folder-menu {
+  border-top: 1px solid #d4dde5;
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+}
+
+.folder-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.folder-actions button {
+  min-height: 28px;
+}
+
+.folder-options {
+  display: grid;
+  gap: 4px;
+  max-height: 178px;
+  overflow: auto;
+}
+
+.folder-options label {
+  align-items: center;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: auto 1fr auto;
+  min-width: 0;
+  padding: 4px 2px;
+}
+
+.folder-options span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-options small {
+  color: #667783;
+  font-size: 11px;
+}
+
 .filters {
   display: grid;
   gap: 8px;

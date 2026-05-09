@@ -6,6 +6,7 @@ import {
   Download,
   FileText,
   Filter,
+  Folder,
   FolderSync,
   Heart,
   Inbox,
@@ -27,16 +28,18 @@ import {
   createImport,
   getEmail,
   getEmailAttachments,
+  listSearchFolders,
   listImports,
   saveNote,
   scanImports,
   searchEmails,
   setFavorite
 } from "./api";
-import type { AttachmentDetail, EmailDetail, ImportFile, ImportJob, SearchMode, SearchResult } from "./types";
+import type { AttachmentDetail, EmailDetail, ImportFile, ImportJob, MailboxFolder, SearchMode, SearchResult } from "./types";
 
 const PAGE_SIZE = 50;
 const THUMBNAIL_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "image/bmp"]);
+const DEFAULT_FOLDER_NAMES = new Set(["inbox", "not directed", "sent", "sent items", "sent mail"]);
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return "No date";
@@ -91,6 +94,15 @@ function displayRecipients(recipients: EmailDetail["recipients"]): string {
     .filter(([, items]) => items.length > 0)
     .map(([label, items]) => `${label}: ${items.map((item) => displayPerson(item.name, item.email)).join(", ")}`);
   return rendered.join(" · ") || "None";
+}
+
+function folderName(folderPath: string): string {
+  const parts = folderPath.split(/[\\/]/).filter(Boolean);
+  return parts[parts.length - 1] || folderPath;
+}
+
+function isDefaultFolder(folderPath: string): boolean {
+  return DEFAULT_FOLDER_NAMES.has(folderName(folderPath).trim().toLocaleLowerCase());
 }
 
 type ImageAttachmentLike = Pick<AttachmentDetail, "filename" | "mime_type"> &
@@ -153,6 +165,9 @@ export function App() {
   const [mode, setMode] = useState<SearchMode>("all");
   const [author, setAuthor] = useState("");
   const [recipient, setRecipient] = useState("");
+  const [folderOptions, setFolderOptions] = useState<MailboxFolder[]>([]);
+  const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
+  const [foldersLoaded, setFoldersLoaded] = useState(false);
   const [subject, setSubject] = useState("");
   const [attachmentFilename, setAttachmentFilename] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -190,6 +205,7 @@ export function App() {
           mode,
           author,
           recipient,
+          folders: folderOptions.length > 0 ? selectedFolders : undefined,
           subject,
           attachmentFilename,
           dateFrom: dateFrom ? new Date(dateFrom).toISOString() : undefined,
@@ -213,12 +229,45 @@ export function App() {
         setLoading(false);
       }
     },
-    [attachmentFilename, author, dateFrom, dateTo, favoriteOnly, hasAttachments, mode, query, recipient, subject]
+    [
+      attachmentFilename,
+      author,
+      dateFrom,
+      dateTo,
+      favoriteOnly,
+      folderOptions.length,
+      hasAttachments,
+      mode,
+      query,
+      recipient,
+      selectedFolders,
+      subject
+    ]
   );
 
   useEffect(() => {
-    void runSearch(0);
+    let canceled = false;
+    listSearchFolders()
+      .then((folders) => {
+        if (canceled) return;
+        setFolderOptions(folders);
+        const defaultFolders = folders.filter((folder) => isDefaultFolder(folder.folder_path)).map((folder) => folder.folder_path);
+        setSelectedFolders(defaultFolders.length ? defaultFolders : folders.map((folder) => folder.folder_path));
+      })
+      .catch((err) => {
+        if (!canceled) setError(err instanceof Error ? err.message : "Failed to load mailbox folders.");
+      })
+      .finally(() => {
+        if (!canceled) setFoldersLoaded(true);
+      });
+    return () => {
+      canceled = true;
+    };
   }, []);
+
+  useEffect(() => {
+    if (foldersLoaded) void runSearch(0);
+  }, [foldersLoaded]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -241,6 +290,10 @@ export function App() {
   const selectedResult = useMemo(() => results.find((result) => result.id === selectedId), [results, selectedId]);
   const selectedIndex = useMemo(() => results.findIndex((result) => result.id === selectedId), [results, selectedId]);
   const noteHasChanges = detail ? noteDraft !== (detail.note || "") : false;
+  const defaultSelectedFolders = useMemo(
+    () => folderOptions.filter((folder) => isDefaultFolder(folder.folder_path)).map((folder) => folder.folder_path),
+    [folderOptions]
+  );
   const visibleDetailAttachments = useMemo(
     () => attachments.filter((attachment) => !isClutterImageAttachment(attachment)),
     [attachments]
@@ -278,6 +331,16 @@ export function App() {
   async function submitSearch(event: FormEvent) {
     event.preventDefault();
     await runSearch(0);
+  }
+
+  function toggleFolder(folderPath: string, checked: boolean) {
+    setSelectedFolders((current) =>
+      checked ? [...new Set([...current, folderPath])] : current.filter((item) => item !== folderPath)
+    );
+  }
+
+  function selectDefaultFolders() {
+    setSelectedFolders(defaultSelectedFolders.length ? defaultSelectedFolders : folderOptions.map((folder) => folder.folder_path));
   }
 
   async function toggleFavorite() {
@@ -361,6 +424,44 @@ export function App() {
                   Favorites
                 </label>
               </div>
+
+              <details className="folder-filter">
+                <summary>
+                  <Folder size={14} />
+                  <span>Folders</span>
+                  <strong>
+                    {folderOptions.length === 0
+                      ? "All"
+                      : selectedFolders.length === folderOptions.length
+                        ? "All"
+                        : `${selectedFolders.length}/${folderOptions.length}`}
+                  </strong>
+                </summary>
+                <div className="folder-menu">
+                  <div className="folder-actions">
+                    <button type="button" onClick={selectDefaultFolders}>
+                      Default
+                    </button>
+                    <button type="button" onClick={() => setSelectedFolders(folderOptions.map((folder) => folder.folder_path))}>
+                      All
+                    </button>
+                  </div>
+                  <div className="folder-options">
+                    {folderOptions.map((folder) => (
+                      <label key={folder.folder_path} title={folder.folder_path}>
+                        <input
+                          type="checkbox"
+                          checked={selectedFolders.includes(folder.folder_path)}
+                          onChange={(event) => toggleFolder(folder.folder_path, event.target.checked)}
+                        />
+                        <span>{folderName(folder.folder_path)}</span>
+                        <small>{folder.email_count.toLocaleString()}</small>
+                      </label>
+                    ))}
+                    {folderOptions.length === 0 && <span className="muted">No folders</span>}
+                  </div>
+                </div>
+              </details>
 
               <div className="filters">
                 <label>

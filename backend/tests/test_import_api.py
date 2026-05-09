@@ -1,10 +1,16 @@
 from pathlib import Path
 from unittest.mock import Mock
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings, get_settings
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def disable_startup_db(monkeypatch):
+    monkeypatch.setattr("app.main.init_db", lambda: None)
 
 
 def test_scan_endpoint_finds_uppercase_pst(tmp_path: Path):

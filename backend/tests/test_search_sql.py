@@ -25,6 +25,15 @@ def test_search_filters_include_recipient():
     assert params["recipient"] == "%kenn%"
 
 
+def test_search_filters_include_selected_folders():
+    service = SearchService(Settings())
+    params = {}
+    filters = service._filters(SearchRequest(folders=["Root/Inbox", "Root/Sent Items"]), params)
+    assert "email_occurrences" in filters
+    assert "ANY(%(folders)s)" in filters
+    assert params["folders"] == ["Root/Inbox", "Root/Sent Items"]
+
+
 def test_semantic_sql_uses_vector_when_available():
     service = SearchService(Settings())
     sql = service._search_sql("contract terms", "semantic", "TRUE", has_vector=True, count=False)

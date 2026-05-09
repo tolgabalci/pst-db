@@ -30,6 +30,11 @@ export interface SearchResponse {
   semantic_error?: string | null;
 }
 
+export interface MailboxFolder {
+  folder_path: string;
+  email_count: number;
+}
+
 export interface EmailDetail {
   id: string;
   message_id: string | null;
@@ -83,4 +88,3 @@ export interface ImportJob {
   started_at: string | null;
   finished_at: string | null;
 }
-

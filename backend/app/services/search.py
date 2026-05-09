@@ -17,6 +17,7 @@ class SearchRequest:
     mode: str = "all"
     author: str | None = None
     recipient: str | None = None
+    folders: list[str] | None = None
     subject: str | None = None
     attachment_filename: str | None = None
     date_from: datetime | None = None
@@ -114,6 +115,17 @@ class SearchService:
                       lower(coalesce(er.email, '')) LIKE %(recipient)s
                       OR lower(coalesce(er.name, '')) LIKE %(recipient)s
                     )
+                )
+                """
+            )
+        if request.folders is not None:
+            params["folders"] = request.folders
+            clauses.append(
+                """
+                EXISTS (
+                  SELECT 1 FROM email_occurrences eo
+                  WHERE eo.email_id = e.id
+                    AND coalesce(eo.folder_path, eo.pst_path) = ANY(%(folders)s)
                 )
                 """
             )
