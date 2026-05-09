@@ -266,6 +266,14 @@ button:disabled {
   box-shadow: inset 3px 0 0 #116466;
 }
 
+.result-row.meeting-request .result-title {
+  color: #5f4b8b;
+}
+
+.result-row.meeting-request .result-meta {
+  color: #715f8f;
+}
+
 .result-main {
   min-width: 0;
 }

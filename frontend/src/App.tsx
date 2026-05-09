@@ -93,13 +93,28 @@ function displayRecipients(recipients: EmailDetail["recipients"]): string {
   return rendered.join(" · ") || "None";
 }
 
-function isThumbnailImage(attachment: AttachmentDetail): boolean {
+type ImageAttachmentLike = Pick<AttachmentDetail, "filename" | "mime_type">;
+
+function isThumbnailImage(attachment: ImageAttachmentLike): boolean {
   const mimeType = attachment.mime_type?.toLowerCase();
   return Boolean(mimeType && THUMBNAIL_IMAGE_TYPES.has(mimeType));
 }
 
-function isGenericImageName(attachment: AttachmentDetail): boolean {
+function isGenericImageName(attachment: ImageAttachmentLike): boolean {
   return isThumbnailImage(attachment) && /^attachedimage(?:\.\w+)?$/i.test(attachment.filename.trim());
+}
+
+function isMeetingRequest(result: SearchResult): boolean {
+  const subject = (result.subject || "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLocaleLowerCase();
+  if (
+    /^(accepted|declined|tentative|canceled|cancelled|updated|rescheduled|proposed new time|new time proposed):/.test(subject)
+  ) {
+    return true;
+  }
+  return /\b(invitation|meeting|teams|llamada|reunion|recording|grabacion)\b/.test(subject) && /\bshared\b/.test(subject);
 }
 
 function statusIcon(status: string) {
@@ -376,45 +391,51 @@ export function App() {
               onKeyDown={handleResultListKeyDown}
               ref={resultListRef}
             >
-              {results.map((result) => (
-                <button
-                  key={result.id}
-                  data-result-id={result.id}
-                  className={`result-row ${selectedId === result.id ? "selected" : ""}`}
-                  aria-selected={selectedId === result.id}
-                  onClick={() => setSelectedId(result.id)}
-                  role="option"
-                  type="button"
-                >
-                  <div className="result-main">
-                    <div className="result-title">
-                      {result.is_favorite && <Star size={14} fill="currentColor" />}
-                      <span>{result.subject || "(No subject)"}</span>
+              {results.map((result) => {
+                const visibleAttachments = result.attachments.filter((attachment) => !isGenericImageName(attachment)).slice(0, 3);
+                const rowClasses = ["result-row", selectedId === result.id ? "selected" : "", isMeetingRequest(result) ? "meeting-request" : ""]
+                  .filter(Boolean)
+                  .join(" ");
+                return (
+                  <button
+                    key={result.id}
+                    data-result-id={result.id}
+                    className={rowClasses}
+                    aria-selected={selectedId === result.id}
+                    onClick={() => setSelectedId(result.id)}
+                    role="option"
+                    type="button"
+                  >
+                    <div className="result-main">
+                      <div className="result-title">
+                        {result.is_favorite && <Star size={14} fill="currentColor" />}
+                        <span>{result.subject || "(No subject)"}</span>
+                      </div>
+                      <div className="result-meta">
+                        <span>{displayPerson(result.sender_name, result.sender_email)}</span>
+                        <span>{formatDate(result.sent_at || result.received_at)}</span>
+                      </div>
+                      <p dangerouslySetInnerHTML={{ __html: result.snippet || "No snippet available." }} />
+                      <div className="chips">
+                        {result.match_reasons.map((reason) => (
+                          <span key={reason}>{reason}</span>
+                        ))}
+                        {visibleAttachments.map((attachment) => (
+                          <span key={attachment.id}>
+                            <Paperclip size={12} />
+                            {attachment.filename}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                    <div className="result-meta">
-                      <span>{displayPerson(result.sender_name, result.sender_email)}</span>
-                      <span>{formatDate(result.sent_at || result.received_at)}</span>
+                    <div className="score">
+                      <strong>{result.score.toFixed(2)}</strong>
+                      <span>K {result.keyword_score.toFixed(2)}</span>
+                      <span>S {result.semantic_score.toFixed(2)}</span>
                     </div>
-                    <p dangerouslySetInnerHTML={{ __html: result.snippet || "No snippet available." }} />
-                    <div className="chips">
-                      {result.match_reasons.map((reason) => (
-                        <span key={reason}>{reason}</span>
-                      ))}
-                      {result.attachments.slice(0, 3).map((attachment) => (
-                        <span key={attachment.id}>
-                          <Paperclip size={12} />
-                          {attachment.filename}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="score">
-                    <strong>{result.score.toFixed(2)}</strong>
-                    <span>K {result.keyword_score.toFixed(2)}</span>
-                    <span>S {result.semantic_score.toFixed(2)}</span>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
               {!loading && results.length === 0 && (
                 <div className="empty">
                   <Inbox size={24} />
