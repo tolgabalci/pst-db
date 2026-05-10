@@ -77,7 +77,8 @@ button:disabled {
 .settings-header,
 .setting-row,
 .setting-control,
-.settings-actions {
+.settings-actions,
+.section-actions {
   align-items: center;
   display: flex;
 }
@@ -296,6 +297,11 @@ button:disabled {
 .notice.warn {
   background: #fff7df;
   color: #744b00;
+}
+
+.notice.info {
+  background: #edf6fb;
+  color: #245c79;
 }
 
 .notice.success {
@@ -627,8 +633,16 @@ mark {
 
 .section-title {
   border-bottom: 1px solid #dce4ea;
+  gap: 16px;
   justify-content: space-between;
   padding: 16px;
+}
+
+.section-actions {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .file-list,

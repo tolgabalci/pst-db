@@ -165,6 +165,14 @@ function moveFocusToResult(list: HTMLDivElement | null, resultId: string) {
   row?.scrollIntoView({ block: "nearest" });
 }
 
+function importKey(value: string | null | undefined): string {
+  return (value || "").replace(/\\/g, "/").trim().toLocaleLowerCase();
+}
+
+function isAlreadyImportedFile(file: ImportFile, completedJobKeys: Set<string>): boolean {
+  return [file.source_path, file.relative_path, file.filename].map(importKey).some((key) => completedJobKeys.has(key));
+}
+
 export function App() {
   const [tab, setTab] = useState<"search" | "imports" | "settings">("search");
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
@@ -723,6 +731,7 @@ export function App() {
 function ImportPanel() {
   const [files, setFiles] = useState<ImportFile[]>([]);
   const [jobs, setJobs] = useState<ImportJob[]>([]);
+  const [showImportedFiles, setShowImportedFiles] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -756,6 +765,23 @@ function ImportPanel() {
     }
   }
 
+  const completedJobKeys = useMemo(
+    () =>
+      new Set(
+        jobs
+          .filter((job) => job.status === "completed")
+          .flatMap((job) => [job.source_path, job.source_filename])
+          .map(importKey)
+          .filter(Boolean)
+      ),
+    [jobs]
+  );
+  const visibleFiles = useMemo(
+    () => (showImportedFiles ? files : files.filter((file) => !isAlreadyImportedFile(file, completedJobKeys))),
+    [completedJobKeys, files, showImportedFiles]
+  );
+  const hiddenImportedCount = files.length - visibleFiles.length;
+
   return (
     <main className="import-layout">
       <section className="import-column">
@@ -764,14 +790,27 @@ function ImportPanel() {
             <h1>Watched PST Folder</h1>
             <p>Copy `.pst` files into `data/imports`, then start an import.</p>
           </div>
-          <button onClick={() => void refresh()} disabled={loading}>
-            <RefreshCw size={16} />
-            Refresh
-          </button>
+          <div className="section-actions">
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={showImportedFiles}
+                onChange={(event) => setShowImportedFiles(event.target.checked)}
+              />
+              Show imported
+            </label>
+            <button onClick={() => void refresh()} disabled={loading}>
+              <RefreshCw size={16} />
+              Refresh
+            </button>
+          </div>
         </div>
         {error && <div className="notice error">{error}</div>}
+        {!showImportedFiles && hiddenImportedCount > 0 && (
+          <div className="notice info">{hiddenImportedCount.toLocaleString()} imported PST file hidden.</div>
+        )}
         <div className="file-list">
-          {files.map((file) => (
+          {visibleFiles.map((file) => (
             <div key={file.source_path} className="file-row">
               <FileText size={20} />
               <div>
@@ -786,10 +825,10 @@ function ImportPanel() {
               </button>
             </div>
           ))}
-          {files.length === 0 && (
+          {visibleFiles.length === 0 && (
             <div className="empty">
               <Filter size={24} />
-              No PST files found in the watched folder.
+              {hiddenImportedCount > 0 ? "No new PST files found in the watched folder." : "No PST files found in the watched folder."}
             </div>
           )}
         </div>
