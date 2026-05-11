@@ -38,6 +38,8 @@ Stop services without deleting imported data:
 
 PSTs are treated as source inputs only. After import, searchable text, metadata, annotations, and de-duped attachment bytes are stored under `data\`.
 
+Architectural decisions are recorded in [`docs/adr`](docs/adr/README.md).
+
 The repository intentionally ignores `.env`, `data\`, `tmp\`, PST/OST/MBOX files, extracted attachment bytes, PostgreSQL files, generated frontend builds, dependency folders, and Python caches. Do not commit real Outlook exports or imported databases.
 
 ## Search
