@@ -173,6 +173,19 @@ function isAlreadyImportedFile(file: ImportFile, completedJobKeys: Set<string>):
   return [file.source_path, file.relative_path, file.filename].map(importKey).some((key) => completedJobKeys.has(key));
 }
 
+function matchedImportStatus(file: ImportFile, jobStatusByKey: Map<string, string>): string | null {
+  const keys = [file.source_path, file.relative_path, file.filename].map(importKey);
+  for (const key of keys) {
+    const status = jobStatusByKey.get(key);
+    if (status && status !== "failed") return status;
+  }
+  return null;
+}
+
+function statusLabel(status: string): string {
+  return status ? status[0].toUpperCase() + status.slice(1) : "";
+}
+
 export function App() {
   const [tab, setTab] = useState<"search" | "imports" | "settings">("search");
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
@@ -776,6 +789,24 @@ function ImportPanel() {
       ),
     [jobs]
   );
+  const jobStatusByKey = useMemo(() => {
+    const statusPriority = new Map([
+      ["running", 4],
+      ["queued", 3],
+      ["completed", 2],
+      ["failed", 1]
+    ]);
+    const statuses = new Map<string, string>();
+    for (const job of jobs) {
+      for (const key of [job.source_path, job.source_filename].map(importKey).filter(Boolean)) {
+        const current = statuses.get(key);
+        if (!current || (statusPriority.get(job.status) || 0) > (statusPriority.get(current) || 0)) {
+          statuses.set(key, job.status);
+        }
+      }
+    }
+    return statuses;
+  }, [jobs]);
   const visibleFiles = useMemo(
     () => (showImportedFiles ? files : files.filter((file) => !isAlreadyImportedFile(file, completedJobKeys))),
     [completedJobKeys, files, showImportedFiles]
@@ -810,21 +841,31 @@ function ImportPanel() {
           <div className="notice info">{hiddenImportedCount.toLocaleString()} imported PST file hidden.</div>
         )}
         <div className="file-list">
-          {visibleFiles.map((file) => (
-            <div key={file.source_path} className="file-row">
-              <FileText size={20} />
-              <div>
-                <strong>{file.filename}</strong>
-                <span>
-                  {formatBytes(file.file_size)} · modified {formatDate(new Date(file.modified_at * 1000).toISOString())}
-                </span>
+          {visibleFiles.map((file) => {
+            const importStatus = matchedImportStatus(file, jobStatusByKey);
+            return (
+              <div key={file.source_path} className="file-row">
+                <FileText size={20} />
+                <div>
+                  <strong>{file.filename}</strong>
+                  <span>
+                    {formatBytes(file.file_size)} · modified {formatDate(new Date(file.modified_at * 1000).toISOString())}
+                  </span>
+                </div>
+                {importStatus ? (
+                  <span className={`file-status ${importStatus}`}>
+                    {statusIcon(importStatus)}
+                    {statusLabel(importStatus)}
+                  </span>
+                ) : (
+                  <button onClick={() => void startImport(file)} disabled={loading}>
+                    <FolderSync size={16} />
+                    Import
+                  </button>
+                )}
               </div>
-              <button onClick={() => void startImport(file)} disabled={loading}>
-                <FolderSync size={16} />
-                Import
-              </button>
-            </div>
-          ))}
+            );
+          })}
           {visibleFiles.length === 0 && (
             <div className="empty">
               <Filter size={24} />

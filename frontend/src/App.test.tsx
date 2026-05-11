@@ -84,6 +84,18 @@ describe("Imports tab", () => {
     expect(importFileList().getByText("Retry.PST")).toBeInTheDocument();
     expect(screen.queryByText("imported PST file hidden.")).not.toBeInTheDocument();
   });
+
+  test("shows queued PST files as queued instead of importable", async () => {
+    mockState.files = [makeFile("Queued.PST")];
+    mockState.jobs = [makeJob("queued.pst", "queued", "c:/data/imports/queued.pst")];
+
+    await renderImportsTab();
+
+    const fileList = importFileList();
+    expect(fileList.getByText("Queued.PST")).toBeInTheDocument();
+    expect(fileList.getByText("Queued")).toBeInTheDocument();
+    expect(fileList.queryByRole("button", { name: "Import" })).not.toBeInTheDocument();
+  });
 });
 
 async function renderImportsTab() {

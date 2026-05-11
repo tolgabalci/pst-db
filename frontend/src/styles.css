@@ -78,7 +78,8 @@ button:disabled {
 .setting-row,
 .setting-control,
 .settings-actions,
-.section-actions {
+.section-actions,
+.file-status {
   align-items: center;
   display: flex;
 }
@@ -669,6 +670,27 @@ mark {
 .job-main span {
   color: #677681;
   font-size: 12px;
+}
+
+.file-status {
+  background: #eef3f6;
+  border: 1px solid #d8e0e7;
+  border-radius: 999px;
+  color: #4f5d67;
+  flex: 0 0 auto;
+  font-size: 12px;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.file-status.queued,
+.file-status.running {
+  color: #245c79;
+}
+
+.file-status.completed {
+  color: #206b3f;
 }
 
 .job-row {
