@@ -1,9 +1,13 @@
 param(
   [string]$ApiBase = "http://localhost:8000",
-  [string]$WebBase = "http://localhost:5173"
+  [string]$WebBase = "http://localhost:5173",
+  [switch]$CheckEmbeddingRuntime,
+  [switch]$RequireGpu,
+  [switch]$FailOnEmbeddingContextErrors
 )
 
 $ErrorActionPreference = "Stop"
+$scriptStart = (Get-Date).ToUniversalTime().ToString("o")
 
 function Wait-RestMethod {
   param(
@@ -59,5 +63,23 @@ if ($scanGet.files.Count -ne $scan.files.Count) {
 Write-Host "Running empty search..."
 $search = Invoke-RestMethod "$ApiBase/api/search?q=&mode=all&limit=5&offset=0"
 Write-Host "Search endpoint returned $($search.total) total result(s)."
+
+if ($CheckEmbeddingRuntime) {
+  $root = Split-Path -Parent $PSScriptRoot
+  $runtimeCheck = Join-Path $root "scripts\check-embedding-runtime.ps1"
+  $ollamaPort = if ($env:OLLAMA_PORT) { [int]$env:OLLAMA_PORT } else { 11434 }
+  $runtimeArgs = @{
+    Model = $health.ollama_model
+    OllamaPort = $ollamaPort
+    Since = $scriptStart
+  }
+  if ($RequireGpu) {
+    $runtimeArgs.RequireGpu = $true
+  }
+  if ($FailOnEmbeddingContextErrors) {
+    $runtimeArgs.FailOnEmbeddingContextErrors = $true
+  }
+  & $runtimeCheck @runtimeArgs
+}
 
 Write-Host "Smoke check completed."

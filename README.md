@@ -9,6 +9,7 @@ Local, read-only PST search for large Outlook exports. The app runs on a Windows
 - Enough disk space for PostgreSQL indexes plus de-duped attachment storage.
 - Optional GPU acceleration for Ollama. The default `embeddinggemma` model is intended to fit the assumed 8 GB VRAM budget.
 - On Rancher Desktop with WSL2/NVIDIA, the Ollama container uses manual WSL GPU passthrough by mounting `/dev/dxg`, `/usr/lib/wsl/lib`, and `/usr/lib/wsl/drivers`.
+- Ollama is configured to keep one embedding model loaded, use a 4096-token context, and allow 4 parallel model requests by default. Override `OLLAMA_CONTEXT_LENGTH`, `OLLAMA_NUM_PARALLEL`, `OLLAMA_MAX_LOADED_MODELS`, `OLLAMA_KEEP_ALIVE`, and `OLLAMA_MAX_QUEUE` in `.env` if the local GPU needs different limits.
 
 ## Run
 
@@ -82,10 +83,26 @@ Compose smoke check after `up.ps1`:
 .\scripts\smoke.ps1
 ```
 
+Embedding runtime diagnostic for a running Compose stack. This probes Ollama, checks `ollama ps` for the loaded model processor, prints CUDA/GPU evidence from the Ollama logs, and can fail on context-length embedding errors in the checked log window:
+
+```powershell
+.\scripts\check-embedding-runtime.ps1 -RequireGpu -FailOnEmbeddingContextErrors
+```
+
+For Windows Task Manager, use a CUDA or Compute graph rather than the default 3D graph. From PowerShell, `nvidia-smi -l 1` is the clearest live signal for embedding GPU compute.
+
+Low GPU memory use is normal with `embeddinggemma`: the model is small, and Ollama allocates the model plus context/parallel request cache rather than reserving all available VRAM. More VRAM is used when `OLLAMA_CONTEXT_LENGTH` or `OLLAMA_NUM_PARALLEL` increases, but throughput also depends on how many embedding requests are active.
+
 Isolated small-PST end-to-end check. This starts a temporary Compose project on alternate ports, downloads a 271 KB valid PST fixture, scans it, imports it, verifies keyword/semantic/author searches, verifies email detail, and checks favorites/notes:
 
 ```powershell
 .\scripts\e2e-sample-pst.ps1
+```
+
+To make the small-PST E2E fail if Ollama is not using GPU for embeddings:
+
+```powershell
+.\scripts\e2e-sample-pst.ps1 -RequireGpu
 ```
 
 Basic search latency benchmark:

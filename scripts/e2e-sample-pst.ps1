@@ -2,6 +2,7 @@ param(
   [string]$SamplePstPath = "",
   [string]$SamplePstUrl = "https://raw.githubusercontent.com/SpongeData-cz/gopst/main/fixtures/simple.pst",
   [int]$TimeoutSeconds = 300,
+  [switch]$RequireGpu,
   [switch]$KeepRunning
 )
 
@@ -154,6 +155,8 @@ try {
     throw "API did not become healthy within $TimeoutSeconds seconds."
   }
 
+  $ollamaLogStart = (Get-Date).ToUniversalTime().ToString("o")
+
   $web = Invoke-WebRequest $webBase -UseBasicParsing
   if ($web.StatusCode -ne 200) {
     throw "Web UI returned status $($web.StatusCode)."
@@ -234,6 +237,18 @@ try {
   if (-not ($noteSearch.results | Where-Object { $_.id -eq $emailId })) {
     throw "Saved note was not included in keyword search."
   }
+
+  $runtimeCheck = Join-Path $rootPath "scripts\check-embedding-runtime.ps1"
+  $runtimeArgs = @{
+    Model = $model
+    OllamaPort = [int]$env:OLLAMA_PORT
+    Since = $ollamaLogStart
+    FailOnEmbeddingContextErrors = $true
+  }
+  if ($RequireGpu) {
+    $runtimeArgs.RequireGpu = $true
+  }
+  & $runtimeCheck @runtimeArgs
 
   Write-Host "Small PST E2E completed successfully."
 } finally {
