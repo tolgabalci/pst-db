@@ -18,11 +18,11 @@ class Settings(BaseSettings):
     import_batch_size: int = 50
     worker_poll_seconds: float = 3.0
     max_attachment_text_chars: int = 200_000
-    max_chunk_chars: int = 3_000
-    chunk_overlap_chars: int = 300
+    max_chunk_chars: int = 1_200
+    chunk_overlap_chars: int = 150
+    max_embedding_input_chars: int = 1_500
 
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

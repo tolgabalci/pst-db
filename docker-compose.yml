@@ -58,6 +58,9 @@ services:
       OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-embeddinggemma}
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-768}
+      MAX_CHUNK_CHARS: ${MAX_CHUNK_CHARS:-1200}
+      CHUNK_OVERLAP_CHARS: ${CHUNK_OVERLAP_CHARS:-150}
+      MAX_EMBEDDING_INPUT_CHARS: ${MAX_EMBEDDING_INPUT_CHARS:-1500}
     ports:
       - "${BIND_HOST:-127.0.0.1}:${API_PORT:-8000}:8000"
     volumes:
@@ -83,6 +86,9 @@ services:
       OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-embeddinggemma}
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-768}
+      MAX_CHUNK_CHARS: ${MAX_CHUNK_CHARS:-1200}
+      CHUNK_OVERLAP_CHARS: ${CHUNK_OVERLAP_CHARS:-150}
+      MAX_EMBEDDING_INPUT_CHARS: ${MAX_EMBEDDING_INPUT_CHARS:-1500}
     volumes:
       - ${IMPORTS_HOST:-./data/imports}:/data/imports
       - ${ATTACHMENTS_HOST:-./data/attachments}:/data/attachments

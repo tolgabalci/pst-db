@@ -100,6 +100,34 @@ def test_repair_existing_email_backfills_missing_recipients(tmp_path: Path):
     assert recipient_inserts == [(email_id, "to", "Recipient Name", "recipient@example.com")]
 
 
+def test_index_email_commits_documents_before_embedding(tmp_path: Path):
+    runner = ImportRunner(
+        Settings(
+            import_dir=tmp_path,
+            attachment_dir=tmp_path / "attachments",
+            embedding_dimensions=3,
+            max_chunk_chars=100,
+            chunk_overlap_chars=0,
+        )
+    )
+    conn = _IndexConn()
+
+    class FakeEmbedder:
+        def embed(self, texts):
+            assert conn.commits >= 1
+            return [[0.1, 0.2, 0.3] for _text in texts], None
+
+    runner.embedder = FakeEmbedder()
+
+    count = runner._index_email(conn, uuid4())
+
+    rendered = "\n".join(statement for statement, _params in conn.statements)
+    assert count == 1
+    assert conn.commits >= 2
+    assert "INSERT INTO search_documents" in rendered
+    assert "SET embedding = %s::vector" in rendered
+
+
 def test_run_job_records_ingest_error_and_continues(monkeypatch, tmp_path: Path):
     pst = tmp_path / "Archive.PST"
     pst.write_bytes(b"pst")
@@ -228,3 +256,28 @@ class _RecordingConn:
 
     def rollback(self):
         self.rollbacks += 1
+
+
+class _IndexConn(_RecordingConn):
+    def __init__(self):
+        super().__init__()
+        self.commits = 0
+
+    def execute(self, statement, params=None):
+        self.statements.append((statement, params))
+        if "SELECT * FROM emails" in statement:
+            return Mock(
+                fetchone=lambda: {
+                    "subject": "Embedding subject",
+                    "sender_name": "Sender",
+                    "sender_email": "sender@example.com",
+                    "sent_at": None,
+                    "body_text": "Body for semantic indexing",
+                }
+            )
+        if "FROM email_attachments" in statement:
+            return Mock(fetchall=lambda: [])
+        return Mock(fetchone=lambda: None, fetchall=lambda: [])
+
+    def commit(self):
+        self.commits += 1

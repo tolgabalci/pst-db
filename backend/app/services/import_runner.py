@@ -432,6 +432,7 @@ class ImportRunner:
         if not inserted_docs:
             return 0
 
+        conn.commit()
         embeddings, error = self.embedder.embed([content for _, content in inserted_docs])
         if error or len(embeddings) != len(inserted_docs):
             conn.execute(
@@ -442,6 +443,7 @@ class ImportRunner:
                 """,
                 (error or "Embedding count did not match chunk count.", [doc_id for doc_id, _ in inserted_docs]),
             )
+            conn.commit()
             return 0
 
         semantic_count = 0
@@ -455,6 +457,7 @@ class ImportRunner:
                 (vector_literal(embedding), doc_id),
             )
             semantic_count += 1
+        conn.commit()
         return semantic_count
 
     def _record_error(self, conn: Connection, job_id, item_ref: str, stage: str, message: str, details=None) -> None:

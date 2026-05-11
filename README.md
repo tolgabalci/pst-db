@@ -10,6 +10,7 @@ Local, read-only PST search for large Outlook exports. The app runs on a Windows
 - Optional GPU acceleration for Ollama. The default `embeddinggemma` model is intended to fit the assumed 8 GB VRAM budget.
 - On Rancher Desktop with WSL2/NVIDIA, the Ollama container uses manual WSL GPU passthrough by mounting `/dev/dxg`, `/usr/lib/wsl/lib`, and `/usr/lib/wsl/drivers`.
 - Ollama is configured to keep one embedding model loaded, use a 4096-token context, and allow 4 parallel model requests by default. Override `OLLAMA_CONTEXT_LENGTH`, `OLLAMA_NUM_PARALLEL`, `OLLAMA_MAX_LOADED_MODELS`, `OLLAMA_KEEP_ALIVE`, and `OLLAMA_MAX_QUEUE` in `.env` if the local GPU needs different limits.
+- Search documents are chunked conservatively for embeddings: default chunks are 1200 characters with 150 characters of overlap, and final Ollama input payloads are capped at 1500 characters after adding titles. This avoids context-length failures from minified CSS, long URLs, and other token-dense attachment text.
 
 ## Run
 

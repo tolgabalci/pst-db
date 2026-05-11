@@ -31,6 +31,7 @@ def index_note(conn: Connection, settings: Settings, email_id, note: str) -> int
     if not inserted_docs:
         return 0
 
+    conn.commit()
     embeddings, error = EmbeddingClient(settings).embed([content for _, content in inserted_docs])
     if error or len(embeddings) != len(inserted_docs):
         conn.execute(
@@ -41,6 +42,7 @@ def index_note(conn: Connection, settings: Settings, email_id, note: str) -> int
             """,
             (error or "Embedding count did not match note chunk count.", [doc_id for doc_id, _ in inserted_docs]),
         )
+        conn.commit()
         return 0
 
     semantic_count = 0
@@ -54,4 +56,5 @@ def index_note(conn: Connection, settings: Settings, email_id, note: str) -> int
             (vector_literal(embedding), doc_id),
         )
         semantic_count += 1
+    conn.commit()
     return semantic_count

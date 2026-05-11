@@ -14,6 +14,7 @@ def test_index_note_replaces_note_documents_and_embeds(monkeypatch):
             pass
 
         def embed(self, texts):
+            assert conn.commits >= 1
             inputs = list(texts)
             return [[0.1, 0.2, 0.3] for _text in inputs], None
 
@@ -28,6 +29,7 @@ def test_index_note_replaces_note_documents_and_embeds(monkeypatch):
 
     rendered = "\n".join(statement for statement, _params in conn.statements)
     assert count == 1
+    assert conn.commits >= 2
     assert "DELETE FROM search_documents" in rendered
     assert "'note'" in rendered
     assert "SET embedding = %s::vector" in rendered
@@ -71,7 +73,11 @@ def test_index_note_keeps_keyword_document_when_embedding_fails(monkeypatch):
 class _RecordingConn:
     def __init__(self):
         self.statements = []
+        self.commits = 0
 
     def execute(self, statement, params=None):
         self.statements.append((statement, params))
         return Mock(fetchone=lambda: None, fetchall=lambda: [])
+
+    def commit(self):
+        self.commits += 1

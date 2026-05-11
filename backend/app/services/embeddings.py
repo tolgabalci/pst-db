@@ -3,6 +3,7 @@ from collections.abc import Iterable
 import httpx
 
 from app.config import Settings
+from app.services.text import clean_text
 
 
 def vector_literal(values: list[float]) -> str:
@@ -14,7 +15,7 @@ class EmbeddingClient:
         self.settings = settings
 
     def embed(self, texts: Iterable[str]) -> tuple[list[list[float]], str | None]:
-        inputs = [text for text in texts if text]
+        inputs = [input_text for text in texts if (input_text := self._prepare_input(text))]
         if not inputs:
             return [], None
 
@@ -55,3 +56,16 @@ class EmbeddingClient:
                 )
         return embeddings
 
+    def _prepare_input(self, text: str) -> str:
+        normalized = " ".join(clean_text(text).split())
+        if not normalized:
+            return ""
+        max_chars = self.settings.max_embedding_input_chars
+        if max_chars <= 0 or len(normalized) <= max_chars:
+            return normalized
+
+        trimmed = normalized[:max_chars].rstrip()
+        boundary = trimmed.rfind(" ", int(max_chars * 0.75))
+        if boundary > 0:
+            trimmed = trimmed[:boundary].rstrip()
+        return trimmed or normalized[:max_chars]

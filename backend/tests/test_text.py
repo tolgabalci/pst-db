@@ -14,6 +14,16 @@ def test_chunk_text_overlaps_long_content():
     assert "word0" in chunks[0]
 
 
+def test_chunk_text_splits_minified_unbroken_content_at_hard_limit():
+    text = ".pfptBanner" + ("{display:block!important;background:#D0D8DC!important;}" * 120)
+
+    chunks = chunk_text(text, max_chars=1200, overlap_chars=150)
+
+    assert len(chunks) > 1
+    assert all(len(chunk) <= 1200 for chunk in chunks)
+    assert chunks[0] != chunks[1]
+
+
 def test_normalize_for_hash_is_case_and_space_stable():
     assert normalize_for_hash("  Hello\nWORLD ") == "hello world"
 
