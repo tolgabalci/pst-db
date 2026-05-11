@@ -169,16 +169,21 @@ function importKey(value: string | null | undefined): string {
   return (value || "").replace(/\\/g, "/").trim().toLocaleLowerCase();
 }
 
-function isAlreadyImportedFile(file: ImportFile, completedJobKeys: Set<string>): boolean {
-  return [file.source_path, file.relative_path, file.filename].map(importKey).some((key) => completedJobKeys.has(key));
+function importFileKeys(file: ImportFile): string[] {
+  return [file.source_path, file.relative_path, file.filename].map(importKey).filter(Boolean);
 }
 
-function matchedImportStatus(file: ImportFile, jobStatusByKey: Map<string, string>): string | null {
-  const keys = [file.source_path, file.relative_path, file.filename].map(importKey);
+function isAlreadyImportedFile(file: ImportFile, completedJobKeys: Set<string>): boolean {
+  return importFileKeys(file).some((key) => completedJobKeys.has(key));
+}
+
+function matchedImportStatus(file: ImportFile, jobStatusByKey: Map<string, string>, pendingImportKeys: Set<string>): string | null {
+  const keys = importFileKeys(file);
   for (const key of keys) {
     const status = jobStatusByKey.get(key);
     if (status && status !== "failed") return status;
   }
+  if (keys.some((key) => pendingImportKeys.has(key))) return "queued";
   return null;
 }
 
@@ -745,6 +750,7 @@ export function App() {
 function ImportPanel() {
   const [files, setFiles] = useState<ImportFile[]>([]);
   const [jobs, setJobs] = useState<ImportJob[]>([]);
+  const [pendingImportKeys, setPendingImportKeys] = useState<Set<string>>(() => new Set());
   const [showImportedFiles, setShowImportedFiles] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -755,6 +761,17 @@ function ImportPanel() {
       const [scan, importJobs] = await Promise.all([scanImports(), listImports()]);
       setFiles(scan.files);
       setJobs(importJobs);
+      const authoritativeKeys = new Set(
+        importJobs
+          .flatMap((job) => [job.source_path, job.source_filename])
+          .map(importKey)
+          .filter(Boolean)
+      );
+      setPendingImportKeys((current) => {
+        if (current.size === 0 || authoritativeKeys.size === 0) return current;
+        const next = new Set([...current].filter((key) => !authoritativeKeys.has(key)));
+        return next.size === current.size ? current : next;
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to refresh imports.");
     }
@@ -767,12 +784,19 @@ function ImportPanel() {
   }, [refresh]);
 
   async function startImport(file: ImportFile) {
+    const keys = importFileKeys(file);
+    setPendingImportKeys((current) => new Set([...current, ...keys]));
     setLoading(true);
     setError(null);
     try {
       await createImport(file.relative_path);
       await refresh();
     } catch (err) {
+      setPendingImportKeys((current) => {
+        const next = new Set(current);
+        keys.forEach((key) => next.delete(key));
+        return next;
+      });
       setError(err instanceof Error ? err.message : "Failed to start import.");
     } finally {
       setLoading(false);
@@ -843,7 +867,7 @@ function ImportPanel() {
         )}
         <div className="file-list">
           {visibleFiles.map((file) => {
-            const importStatus = matchedImportStatus(file, jobStatusByKey);
+            const importStatus = matchedImportStatus(file, jobStatusByKey, pendingImportKeys);
             return (
               <div key={file.source_path} className="file-row">
                 <FileText size={20} />

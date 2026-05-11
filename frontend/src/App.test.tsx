@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom/vitest";
 
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { AppSettings, ImportFile, ImportJob } from "./types";
@@ -43,6 +43,7 @@ vi.mock("./api", () => ({
 }));
 
 import { App } from "./App";
+import { createImport } from "./api";
 
 describe("Imports tab", () => {
   beforeEach(() => {
@@ -107,6 +108,40 @@ describe("Imports tab", () => {
     expect(fileList.getByText("Running.PST")).toBeInTheDocument();
     expect(fileList.getByText("running")).toBeInTheDocument();
     expect(fileList.queryByRole("button", { name: "Import" })).not.toBeInTheDocument();
+  });
+
+  test("hides the import button immediately after starting an import", async () => {
+    mockState.files = [makeFile("Started.PST")];
+    let finishImport: ((job: ImportJob) => void) | undefined;
+    vi.mocked(createImport).mockImplementationOnce(
+      () =>
+        new Promise<ImportJob>((resolve) => {
+          finishImport = resolve;
+        })
+    );
+
+    await renderImportsTab();
+    const fileList = importFileList();
+    fireEvent.click(fileList.getByRole("button", { name: "Import" }));
+
+    await waitFor(() => expect(fileList.getByText("Queued")).toBeInTheDocument());
+    expect(fileList.queryByRole("button", { name: "Import" })).not.toBeInTheDocument();
+
+    mockState.jobs = [makeJob("Started.PST", "queued")];
+    finishImport?.(makeJob("Started.PST", "queued"));
+  });
+
+  test("restores the import button when starting an import fails", async () => {
+    mockState.files = [makeFile("FailedStart.PST")];
+    vi.mocked(createImport).mockRejectedValueOnce(new Error("Failed to queue import."));
+
+    await renderImportsTab();
+    const fileList = importFileList();
+    fireEvent.click(fileList.getByRole("button", { name: "Import" }));
+
+    await screen.findByText("Failed to queue import.");
+    expect(fileList.getByRole("button", { name: "Import" })).toBeInTheDocument();
+    expect(fileList.queryByText("Queued")).not.toBeInTheDocument();
   });
 });
 
