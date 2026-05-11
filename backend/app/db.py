@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from pathlib import Path
+import time
 from typing import Iterator
 
 from psycopg import Connection, errors
@@ -11,6 +12,8 @@ from app.config import get_settings
 _pool: ConnectionPool | None = None
 _SCHEMA_LOCK_ID = 790384231
 _EXTENSIONS = ("vector", "pg_trgm", "unaccent")
+_INIT_DB_RETRIES = 4
+_INIT_DB_RETRY_SECONDS = 1.5
 
 
 def get_pool() -> ConnectionPool:
@@ -34,6 +37,17 @@ def get_conn() -> Iterator[Connection]:
 
 
 def init_db() -> None:
+    for attempt in range(_INIT_DB_RETRIES):
+        try:
+            _init_db_once()
+            return
+        except (errors.DeadlockDetected, errors.SerializationFailure, errors.LockNotAvailable):
+            if attempt == _INIT_DB_RETRIES - 1:
+                raise
+            time.sleep(_INIT_DB_RETRY_SECONDS * (attempt + 1))
+
+
+def _init_db_once() -> None:
     schema_path = Path(__file__).with_name("schema.sql")
     sql = _schema_without_extensions(schema_path.read_text(encoding="utf-8"))
     with get_conn() as conn:
