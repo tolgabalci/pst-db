@@ -700,8 +700,17 @@ mark {
 }
 
 .job-status {
+  align-content: start;
+  display: grid;
   gap: 8px;
   text-transform: capitalize;
+}
+
+.job-status span {
+  color: #677681;
+  font-size: 12px;
+  line-height: 1.3;
+  text-transform: none;
 }
 
 .job-row.completed .job-status {

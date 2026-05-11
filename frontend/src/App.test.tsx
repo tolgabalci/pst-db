@@ -143,6 +143,38 @@ describe("Imports tab", () => {
     expect(fileList.getByRole("button", { name: "Import" })).toBeInTheDocument();
     expect(fileList.queryByText("Queued")).not.toBeInTheDocument();
   });
+
+  test("shows estimated remaining time for running imports when completed import history exists", async () => {
+    const now = Date.now();
+    mockState.jobs = [
+      makeJob("Done.PST", "completed", "C:\\Data\\Imports\\Done.PST", {
+        file_size: 1000,
+        started_at: "2026-05-09T00:00:00Z",
+        finished_at: "2026-05-09T00:00:10Z"
+      }),
+      makeJob("Running.PST", "running", "C:\\Data\\Imports\\Running.PST", {
+        file_size: 2000,
+        started_at: new Date(now - 5000).toISOString()
+      })
+    ];
+
+    await renderImportsTab();
+
+    expect(screen.getByText("Estimated remaining: 15 sec")).toBeInTheDocument();
+  });
+
+  test("shows estimating remaining time when no completed import history exists", async () => {
+    mockState.jobs = [
+      makeJob("Running.PST", "running", "C:\\Data\\Imports\\Running.PST", {
+        file_size: 2000,
+        started_at: "2026-05-10T00:00:00Z"
+      })
+    ];
+
+    await renderImportsTab();
+
+    expect(screen.getByText("Estimated remaining: estimating")).toBeInTheDocument();
+  });
 });
 
 async function renderImportsTab() {
@@ -168,7 +200,12 @@ function makeFile(filename: string): ImportFile {
   };
 }
 
-function makeJob(filename: string, status: string, sourcePath = `C:\\Data\\Imports\\${filename}`): ImportJob {
+function makeJob(
+  filename: string,
+  status: string,
+  sourcePath = `C:\\Data\\Imports\\${filename}`,
+  overrides: Partial<ImportJob> = {}
+): ImportJob {
   return {
     id: `job-${filename}-${status}`,
     source_filename: filename,
@@ -185,6 +222,7 @@ function makeJob(filename: string, status: string, sourcePath = `C:\\Data\\Impor
     last_error: null,
     created_at: "2026-05-10T00:00:00Z",
     started_at: null,
-    finished_at: null
+    finished_at: null,
+    ...overrides
   };
 }

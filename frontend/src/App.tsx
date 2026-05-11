@@ -67,6 +67,20 @@ function formatBytes(value: number): string {
   return `${size.toFixed(size >= 10 ? 1 : 2)} ${units[index]}`;
 }
 
+function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "estimating";
+  const rounded = Math.max(1, Math.round(seconds));
+  if (rounded < 60) return `${rounded} sec`;
+  const minutes = Math.round(rounded / 60);
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours < 24) return remainingMinutes ? `${hours} hr ${remainingMinutes} min` : `${hours} hr`;
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  return remainingHours ? `${days} day ${remainingHours} hr` : `${days} day`;
+}
+
 function titleCaseName(value: string): string {
   if (!value || value !== value.toUpperCase()) return value;
   return value.toLowerCase().replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
@@ -190,6 +204,31 @@ function matchedImportStatus(file: ImportFile, jobStatusByKey: Map<string, strin
 function statusLabel(status: string): string {
   if (status === "running") return "running";
   return status ? status[0].toUpperCase() + status.slice(1) : "";
+}
+
+function completedImportSecondsPerByte(jobs: ImportJob[]): number | null {
+  let totalSeconds = 0;
+  let totalBytes = 0;
+  for (const job of jobs) {
+    if (job.status !== "completed" || !job.started_at || !job.finished_at || job.file_size <= 0) continue;
+    const started = new Date(job.started_at).getTime();
+    const finished = new Date(job.finished_at).getTime();
+    if (!Number.isFinite(started) || !Number.isFinite(finished) || finished <= started) continue;
+    totalSeconds += (finished - started) / 1000;
+    totalBytes += job.file_size;
+  }
+  return totalBytes > 0 ? totalSeconds / totalBytes : null;
+}
+
+function estimatedRemainingLabel(job: ImportJob, secondsPerByte: number | null, now = Date.now()): string {
+  if (job.status !== "running" || !job.started_at || job.file_size <= 0 || !secondsPerByte) return "Estimated remaining: estimating";
+  const started = new Date(job.started_at).getTime();
+  if (!Number.isFinite(started) || now <= started) return "Estimated remaining: estimating";
+  const estimatedTotalSeconds = job.file_size * secondsPerByte;
+  const elapsedSeconds = (now - started) / 1000;
+  const remainingSeconds = estimatedTotalSeconds - elapsedSeconds;
+  if (remainingSeconds <= 0) return "Estimated remaining: recalculating";
+  return `Estimated remaining: ${formatDuration(remainingSeconds)}`;
 }
 
 export function App() {
@@ -837,6 +876,7 @@ function ImportPanel() {
     [completedJobKeys, files, showImportedFiles]
   );
   const hiddenImportedCount = files.length - visibleFiles.length;
+  const importSecondsPerByte = useMemo(() => completedImportSecondsPerByte(jobs), [jobs]);
 
   return (
     <main className="import-layout">
@@ -913,6 +953,7 @@ function ImportPanel() {
               <div className="job-status">
                 {statusIcon(job.status)}
                 <strong>{job.status}</strong>
+                {job.status === "running" && <span>{estimatedRemainingLabel(job, importSecondsPerByte)}</span>}
               </div>
               <div className="job-main">
                 <strong>{job.source_filename}</strong>
