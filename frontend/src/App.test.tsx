@@ -96,6 +96,18 @@ describe("Imports tab", () => {
     expect(fileList.getByText("Queued")).toBeInTheDocument();
     expect(fileList.queryByRole("button", { name: "Import" })).not.toBeInTheDocument();
   });
+
+  test("shows running PST files as running instead of importable", async () => {
+    mockState.files = [makeFile("Running.PST")];
+    mockState.jobs = [makeJob("running.pst", "running", "c:/data/imports/running.pst")];
+
+    await renderImportsTab();
+
+    const fileList = importFileList();
+    expect(fileList.getByText("Running.PST")).toBeInTheDocument();
+    expect(fileList.getByText("running")).toBeInTheDocument();
+    expect(fileList.queryByRole("button", { name: "Import" })).not.toBeInTheDocument();
+  });
 });
 
 async function renderImportsTab() {

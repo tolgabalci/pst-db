@@ -183,6 +183,7 @@ function matchedImportStatus(file: ImportFile, jobStatusByKey: Map<string, strin
 }
 
 function statusLabel(status: string): string {
+  if (status === "running") return "running";
   return status ? status[0].toUpperCase() + status.slice(1) : "";
 }
 
